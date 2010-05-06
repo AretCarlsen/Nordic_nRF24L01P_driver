@@ -22,7 +22,6 @@
 */
 
 #include "mirf.hpp"
-#include "nRF24L01.hpp"
 #include "nRF-spi.hpp"
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -102,19 +101,22 @@ ISR(PCINT2_vect){
     }
 }
 
-extern uint8_t mirf_data_ready(){ 
-// Checks if data is available for reading
-    if (PTX) return 0;
-    uint8_t status;
-    // Read MiRF status 
-    mirf_CSN_lo();                                // Pull down chip select
-    status = spi_fast_shift(NOP);               // Read status register
-    mirf_CSN_hi();                                // Pull up chip select
-    return status & (1<<RX_DR);
+// Read MiRF status 
+uint8_t mirf_get_status(){
+  mirf_CSN_lo();                                // Pull down chip select
+  uint8_t status = spi_fast_shift(NOP);         // Read status register
+  mirf_CSN_hi();                                // Pull up chip select
+  return status;
 }
 
-extern void mirf_get_data(uint8_t * data){
-// Reads mirf_PAYLOAD bytes into data array
+uint8_t mirf_data_ready(){ 
+// Checks if data is available for reading
+    if (PTX) return 0;
+    return mirf_get_status() & (1<<RX_DR);
+}
+
+void mirf_get_data(uint8_t *data){
+// Reads up to MAX_PAYLOAD bytes into data array
     mirf_CSN_lo();                               // Pull down chip select
     spi_fast_shift( R_RX_PAYLOAD );            // Send cmd to read rx payload
     spi_transfer_sync(data,data,mirf_PAYLOAD); // Read payload
