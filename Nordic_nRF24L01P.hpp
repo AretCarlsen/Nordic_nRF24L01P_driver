@@ -47,10 +47,8 @@ class Nordic_nRF24L01P : public ChannelBus {
   AVRPin CSN_pin;
   AVRPin CE_pin;
 
-// Static definitions
-  #include "Nordic_nRF24L01P_definitions.hpp"
-
 public:
+
   Nordic_nRF24L01P(const AVROutputPin &new_CSN_pin, const AVROutputPin new_CE_pin)
   : CSN_pin(new_CSN_pin), CE_pin(new_CE_pin)
   {
@@ -61,15 +59,40 @@ public:
     enable_features(true);
   }
 
-// Strobe the CE pin for the minimum required 10us, e.g. to initiate a packet transmission.
-  inline void strobe_CE(){
-  // Nothing to do if CE is already high.
-    if(CE_pin.get_state()) return;
+// Register
+  typedef uint8_t Register_t;
+// Bit position and mask, where mask is usually _BV(BitPos)
+  typedef uint8_t BitPos_t;
+  typedef uint8_t BitMask_t;
+// SPI opcode
+  typedef uint8_t Opcode_t;
+// RF channel
+  typedef uint8_t Channel_t;
+// RF frequency, MHz
+  typedef uint16_t Frequency_t;
+// RF gain, dBm
+  typedef int8_t Gain_t;
+// Data rate
+  typedef enum { Rate_250K, Rate_1M, Rate_2M } Rate_t;
+// Modes
+  typedef enum { Mode_RX, Mode_TX } Mode_t;
+// Auto retransmit delay
+  typedef uin8t_t ARD_t;
+// Interrupts
+  typedef enum { Interrupt_RX_DR = 0, Interrupt_TX_DS = 1, Interrupt_RX_DR = 2 } Interrupt_t;
 
-    CE_pin.set_high();
-    // Must be high for at least 10us.
+// Constant definitions
+  #include "Nordic_nRF24L01P_definitions.hpp"
+
+
+/* PIN CONTROL */
+
+// Strobe the CE pin, e.g. to initiate a packet transmission or retransmission.
+  inline void strobe_CE(){
+    CE_pin.toggle();
+    // Must be shifted for at least 10us. (At least, it must be for a high pulse.)
     _delay_us(10);
-    CE_pin.set_low();
+    CE_pin.toggle();
   }
 
 /* REGISTER CONTROL */
@@ -133,9 +156,8 @@ public:
     write_register_bits(Register_FEATURE, Bit_EN_DPL | Bit_EN_ACK_PAY | Bit_EN_DYN_ACK, new_value);
   }
   // True = mode TX, false = mode RX.
-  inline void set_mode_TX(bool new_value){
-    if(new_value) write_register_AND(Register_CONFIG, ~Bit_PRIM_RX);
-    else write_register_OR(Register_CONFIG, Bit_PRIM_RX);
+  inline void set_mode(Mode_t new_value){
+    write_register_bits(Register_CONFIG, Bit_PRIM_RX, new_value == Mode_RX);
   }
   // True = powered up, False = powered down.
   inline void set_power_state(bool new_value){
@@ -145,36 +167,212 @@ public:
   inline void set_chip_enabled(bool new_value){
     CE_pin.set_value(new_value);
   }
-  // Enable/disable interrupts. (True = enabled, false = masked.)
-  inline void set_interrupt_RXDR(bool new_value){
+  // Enable/disable which interrupts show up on the IRQ pin. (True = enabled, false = masked.)
+  inline void set_interrupt_pin(Interrupt_t interrupt, bool new_value){
     // Inverted, because bit actually indicates masked interrupt.
-    write_register_bits(Register_CONFIG, Bit_MASK_RX_DR, ~new_value);
+    write_register_bits(Register_CONFIG, Bit_MAX_RT << interrupt, ~new_value);
   }
-  inline void set_interrupt_TXDS(bool new_value){
-    write_register_bits(Register_CONFIG, Bit_MASK_TX_DS, ~new_value);
+  // Read an interrupt.
+  inline bool read_interrupt(Interrupt_t interrupt){
+    return read_status() & (Bit_MAX_RT << interrupt);
   }
-  inline void set_interrupt_MAXRT(bool new_value){
-    write_register_bits(Register_CONFIG, Bit_MASK_MAX_RT, ~new_value);
+  // Clear an interrupt
+  inline void clear_interrupt(Interrupt_t interrupt){
+    // Interrupts are cleared by writing a 1 to their flags the STATUS register.
+    write_register_OR(Register_STATUS, Bit_MAX_RT << interrupt); 
   }
+  // Clear all three interrupts.
+  inline void clear_all_interrupts(){
+    write_register_bits(Register_STATUS, Bit_MASK_RX_DR | Bit_MASK_TX_DS | Bit_MASK_MAX_RT, true);
+  }
+  // Check interrupts
+  inline bool check_packet_transmitted(){
+    return read_interrupt(Interrupt_TX_DS);
+  }
+  inline bool clear_packet_transmitted(){
+    return clear_interrupt(Interrupt_TX_DS);
+  }
+  inline bool check_maximum_retries_reached(){
+    return read_interrupt(Interrupt_MAX_RT);
+  }
+  inline bool clear_maximum_retries_reached(){
+    return clear_interrupt(Interrupt_MAX_RT);
+  }
+  inline bool check_packet_received(){
+    return read_interrupt(Interrupt_RX_DR);
+  }
+  inline bool clear_packet_received(){
+    return clear_interrupt(Interrupt_RX_DR);
+  }
+
+/* PACKET CONTROL */
   // Set the number of transmitted CRC bytes.
-  inline void set_CRC_bytes(uint8_t new_value){
-    // EN_CRC=CRC0=0
-    if(new_value == 0) write_register_bits(Register_CONFIG, Bit_EN_CRC | Bit_CRC0, false);
-    // EN_CRC=1, CRC0=0
-    else if(new_value == 1) write_register(Register_CONFIG, (read_register(Register_CONFIG) & ~Bit_EN_CRC0) | Bit_EN_CRC);
-    // EN_CRC=CRC0=1
-    else if(new_value == 2) write_register_bits(Register_CONFIG, Bit_EN_CRC | Bit_CRC0, true);
-    // Ignore values over 2
+  // Note that a value of 0 will be clamped to 1 if AutoAcknowledge is enabled.
+  inline void set_CRC_size(const uint8_t new_value){
+  // Clamp to limits
+    if(new_value > CRC_Max) new_value = CRC_Max;
+
+    // Read config, clearing relevant flags.
+    uint8_t config = read_register(Register_CONFIG) & ~(Bit_EN_CRC | Bit_CRC0);
+    // For CRC size 0, no change
+    // For CRC size 1, EN_CRC=1, CRC0=0
+    if(new_value == 1) config |= Bit_EN_CRC;
+    // For CRC size 2, EN_CRC=CRC0=1
+    else if(new_value == 2) config |= Bit_EN_CRC | Bit_CRC0;
+
+    write_register(Register_CONFIG, config);
+  }
+  // Enable/disable auto ACK for a pipe.
+    // Note that auto ACK is incompatible with the nRF24L01 (without the +).
+  inline void set_auto_acknowledge(const uint8_t pipe, const bool new_value){
+  // Sanity check
+    if(pipe > 5) return;
+  // Could use a switch statement to pick up the individual definitions.
+  // However, they are all lined up in the register anyway, and the sanity check already happened.
+    write_register_bits(Register_EN_AA, Bit_ENAA_P0 << pipe, new_value);
+  }
+  // Set the auto-retransmit delay (ARD), in 250us units. This should be at least 500us in many situations.
+  inline void set_auto_retransmit_delay(ARD_t new_delay){
+    if(new_delay > AutoRetransmitDelay_Max) new_delay = AutoRetransmitDelay_Max;
+    write_register(Register_SETUP_RETR, (read_register(Register_SETUP_RETR) & ~BitMask_ARD) | (new_delay << BitPos_ARD));
+  }
+  // Set the maximum auto-retransmit count. 0 => disabled.
+  inline void set_auto_retransmit_count_limit(uint8_t new_limit){
+    // Clamp to limits
+    if(new_limit > AutoRetransmitCount_Max) new_limit = AutoRetransmitCount_Max;
+    write_register(Register_SETUP_RETR, (read_register(Register_SETUP_RETR) & ~Bitmask_ARC) | (new_limit << BitPos_ARC));
+  }
+  // Persists until RF channel is changed.
+  inline uint8_t read_lost_packet_count(){
+     return (read_register(Register_OBSERVE_TX) & BitMask_PLOS_CNT) >> BitPos_PLOS_CNT;
+  }
+  // Resets on every new packet transmission.
+  inline uint8_t read_retransmission_count(){
+     return (read_register(Register_OBSERVE_TX) & BitMask_ARC_CNT) >> BitPos_ARC_CNT;
+  }
+
+/* RF CONTROL */
+  // Set the RF send/receive channel.
+  inline void set_channel(Channel_t new_channel, const bool clamp_2MHz = false){
+    // Clamp to max channel.
+    if(new_channel > Channel_Max) new_channel = Channel_Max;
+    // Clamp to 2MHz channel width. Assumes that MIN and MAX channels are even.
+    else if(clamp_2MHz) new_channel -= new_channel % 2;
+    write_register(Register_RF_CH, new_channel);
+  }
+  // Set the RF send/receive frequency, in MHz.
+  inline void set_frequency(Frequency_t new_frequency){
+    // Clamp to limits.
+    if(new_frequency < Min_Frequency) new_frequency = Min_Frequency;
+    else if(new_frequency > Max_Frequency) new_frequency = Max_Frequency;
+  // Channel is MHz above Min_Frequency (2400MHz). For instance, 2405MHz is channel 5.
+    set_channel(new_frequency - Min_Frequency);
+  }
+  // Set the RF gain. Provided value is rounded down to next lowest allowed value.
+  inline void set_gain(Gain_t new_gain){
+  // Clamp to limits.
+    if(new_gain < Gain_Min) new_gain = Gain_Min;
+    else if(new_gain > Gain_Max) new_gain = Gain_Max;
+
+  // Translate into nonnegative integer space and scale.
+    write_register(Register_RF_SETUP, ((new_gain - MIN_GAIN) / 6) << BitPos_RF_PWR);
+  }
+  // Set the data rate to one of the allowed values.
+  inline void set_data_rate(Rate_t new_rate){
+  // Clear both bits.
+    uint8_t rf_setup = read_register(RF_SETUP) & ~(Bit_RF_DR_HIGH | Bit_RF_DR_LOW);
+  // For rate 250K, set DR_LOW.
+    if(new_rate == Rate_250K) rf_setup |= Bit_RF_DR_LOW;
+  // For rate 2M, set DR_HIGH.
+    else if(new_rate == Rate_2M) rf_setup |= Bit_RF_DR_HIGH;
+  // For rate 1M, leave both bits cleared.
+
+  // Write out config.
+    write_register(Register_RF_SETUP, rf_setup);
+  }
+
+/* ADDRESS CONTROL */
+  inline void set_address_size(uint8_t new_size){
+  // Clamp to limits
+    if(new_size < MinAddressSize) new_size = MinAddressSize;
+    else if(new_size > MaxAddressSize) new_size = MaxAddressSize;
+  // Register contains address size, offset by 1.
+    write_register(Register_SETUP_AW, new_size + 1);
+  }
+  inline void write_address(const uint8_t reg, uint8_t* new_address, const uint8_t len){
+  // Trim size to maximum address size.
+    if(len > MaxAddressSize) len = MaxAddressSize; // new_address += MaxAddressSize - len;
+
+    CSN_pin.set_low();
+
+  // Opcode
+    spi_transceive(Opcode_WRITE_REGISTER | (Opcode_REGISTER_MASK & reg));
+    uint8_t i = 0;
+  // Write the actual data
+    for(; i < len; i++){
+      spi_transceive(new_address);
+      new_address++;
+    }
+  // Write the zero'd MSBs, if any
+    for(; i < MaxAddressSize; i++)
+      spi_transceive(0);
+
+    CSN_pin.set_high();
+  }
+  // Set the transmission address from an array of bytes.
+  // The second argument determines whether RX pipe 0 is set to a matching address s.t. ACKs can be received.
+  inline void set_TX_address(uint8_t* new_address, const uint8_t len, const bool set_matching_ACK = true){
+    write_address(Register_TX_ADDR, new_address, len);
+
+  // Set ACK receive pipe to matching address, if desired.
+    if(set_matching_ACK){
+      set_RX_address(ACK_Rx_Pipe, new_address, len);
+      set_RX_pipe_enabled(ACK_Rx_Pipe);
+    }
+  }
+  // Set transmission address from a 32-bit unsigned int, rather than an array.
+  inline void set_TX_address(const uint32_t &new_address, bool set_matching_ACK = true){
+  // Presumes little-endian integer storage.
+    set_TX_address(&new_address, sizeof(uint32_t), set_matching_ACK);
+  }
+  // Set the receive address for a pipe from an array of bytes.
+  inline void set_RX_address(uint8_t pipe, uint8_t* const new_address, const uint8_t len){
+    write_address(Register_RX_ADDR, new_address, len); 
+  }
+  // Set receive address from a 32-bit unsigned int, rather than an array.
+  inline void set_RX_address(uint8_t pipe, const uint32_t &new_address){
+  // Presumes little-endian integer storage.
+    set_RX_address(pipe, &new_address, sizeof(uint32_t));
+  }
+  inline void set_RX_pipe_enabled(uint8_t pipe, bool new_value){
+  // Sanity check
+    if(pipe > 5) return;
+  // Could use a switch statement to pick up the individual definitions.
+  // However, they are all lined up in the register anyway, and the sanity check already happened.
+    write_register_bits(Register_EN_RXADDR, ERX_P0 << pipe, new_value);
   }
 
 /* FIFO CONTROL */
   // In TX mode, add a packet to the outgoing queue. The argument determines whether an ACK is requested.
-  // (This opcode is presumably ignored in RX mode.)
-  inline void queue_packet(bool ack_requested = true, uint8_t buf, uint8_t buf_len){
+  // In RX mode, add a packet to the ACK-payload outgoing queue. (Ack_requested argument is ignored.)
+  inline void queue_TX_packet(const uint8_t buf, const uint8_t buf_len, bool ack_requested = true){
     CSN_pin.set_low();
-    if(ack_requested) spi_transceive(Opcode_W_TX_PAYLOAD);
-    else W_TX_PAYLOAD
+  // Opcode depends on ACK preference.
+    spi_transceive(ack_requested? Opcode_W_TX_PAYLOAD : W_TX_PAYLOAD_NOACK);
+  // Send packet payload.
     spi_transceive(buf, len); 
+    CSN_pin.set_high();
+  }
+  // Queue an outgoing RX packet (ACK payload), associated with a specific address/pipe.
+  inline void queue_RX_packet(const uint8_t buf, const uint8_t buf_len, const Pipe_t rx_pipe){
+    // Ignore if RX pipe out of bounds
+    if(rx_pipe > Pipe_Max) return;
+
+    CSN_pin.set_low();
+  // Specify pipe with opcode.
+    spi_transceive(Opcode_W_ACK_PAYLOAD | rx_pipe);
+  // Send packet payload.
+    spi_transceive(buf, len);
     CSN_pin.set_high();
   }
   // Transmit a single packet. Does nothing if transmission is already in progress, in RX mode, or if
@@ -182,9 +380,51 @@ public:
   inline void transmit_packet(){
     strobe_CE();
   }
+  // Reuse the last transmitted payload.
+  // Reuse continues until queue_packet() or flush_transmit_buffer() is called.
+  inline void transmit_reused(){
+    CSN_pin.set_low();
+    spi_transceive(Opcode_REUSE_TX_PL);
+    CSN_pin.set_high();
+  }
 
-  inline void receive_packet(uint8_t buf, uint8_t buf_len){
-    
+  // Get the size of the packet in the front of the RX FIFO.
+  // Returns 0 if no packet?
+  inline uint8_t read_received_packet_size(){
+    CSN_pin.set_low();
+    uint8_t size = spi_transceive(Opcode_R_RX_PL_WID);
+    CSN_pin.set_high(); 
+    return size; 
+  }
+  // Receive a packet. Returns the packet size (or 0 if none received).
+  // Will read buf_len or packet_size bytes, whichever is shorter.
+  inline uint8_t receive_packet(uint8_t *buf, uint8_t buf_len = 32, uint8_t &rx_pipe){
+    uint8_t packet_size = read_received_packet_size();
+  // No packet?
+    if(packet_size == 0) return 0;
+  // Invalid packet?  (See datasheet.)
+    if(packet_size > 32){
+      flush_receive_buffer();
+      return 0;
+    }
+
+  // Save the received packet pipe.
+    rx_pipe = read_received_packet_pipe();
+
+  // Trim packet size to buffer size.
+    if(packet_size > buf_len) packet_size = buf_len;
+  // Receive packet.
+    CSN_pin.set_low();
+    spi_transceive(Opcode_R_RX_PAYLOAD); 
+    spi_transceive(buf, buf_len); 
+    CSN_pin.set_high();
+
+    return packet_size;
+  }
+  // rx_pipe default parameter.
+  inline uint8_t receive_packet(uint8_t *buf, uint8_t buf_len = 32){
+    uint8_t rx_pipe;
+    return receive_packet(buf, buf_len, rx_pipe);
   }
 
   // Check whether the transmission packet FIFO is full.
@@ -196,32 +436,31 @@ public:
     return (read_register(Register_FIFO_STATUS) & Bit_FIFO_TX_FULL);
   }
   // Flush the transmission FIFO.
-  inline void transmit_buffer_flush(){
+  inline void flush_transmit_buffer(){
     CSN_pin.set_low();
     spi_transceive(Opcode_FLUSH_TX);
     CSN_pin.set_high();
   }
+
   // Check whether the reception packet FIFO is full.
   inline bool receive_buffer_full(){
     return (read_register(Register_FIFO_STATUS) & Bit_RX_FULL);
   }
+  // Check which RX pipe a received packet (at the front of the FIFO) is
+  // associated with. Returns a nonsensical value (7) if no packet
+  // is pending.
+  inline uint8_t read_received_packet_pipe(){
+    return (read_status() & BitMask_RX_P_NO) >> BitPos_RX_P_NO;
+  }
   // Check whether the reception packet FIFO is empty.
   inline bool receive_buffer_empty(){
-    return (read_register(Register_FIFO_STATUS) & Bit_RX_EMPTY);
+    return ((read_status() & BitMask_RX_P_NO) == BitMask_RX_P_NO_Empty);   // read_register(Register_FIFO_STATUS) & Bit_RX_EMPTY
   }
-  // Flush the reception FIFO.
-  inline void receive_buffer_flush(){
+  // Flush the reception FIFO. Note that this may corrupt any ACKs in progress.
+  inline void flush_receive_buffer(){
     CSN_pin.set_low();
     spi_transceive(Opcode_FLUSH_RX);
     CSN_pin.set_high();
-  }
-
-
-  void queue_packet(bool no_ack = false){
-    
-  }
-  void set_channel(Channel_t new_channel){
-    
   }
 };
 

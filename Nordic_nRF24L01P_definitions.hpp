@@ -1,8 +1,29 @@
 
-// Underlying data from Stefan Engelke <mbox@stefanengelke.de>, 2007
 //namespace Nordic_nRF24L01P {
+
+  static const uint8_t AddressSize_Min = 3;
+  static const uint8_t AddressSize_Max = 5;
+  static const uint8_t ACK_Rx_Pipe = 0;
+
+  static const uint8_t CRC_Max = 2;
+
+  // Auto retransmit delay. 250us units.
+  static const Delay_t AutoRetransmitDelay_Max = 15;
+  // Auto retransmit count. 0 is effectively disabled.
+  static const Delay_t AutoRetransmitCount_Max = 15;
+
+  // Radio channels
+  static const Channel_t Channel_Max = 127;
+  // Radio frequency, MHz
+  static const Frequency_t Frequency_Min = 2400;
+  static const Frequency_t Frequency_Max = 2527;  // ?
+
+  // Radio gain, dBm
+  static const Gain_t Gain_Min = -18;
+  static const Gain_t Gain_Max = 0;
+
+// Much underlying data from Stefan Engelke <mbox@stefanengelke.de>, 2007.
 // Registers
-  typedef uint8_t Register_t;
   static const Register_t Register_CONFIG      = 0x00;
   static const Register_t Register_EN_AA       = 0x01;
   static const Register_t Register_EN_RXADDR   = 0x02;
@@ -29,7 +50,6 @@
   static const Register_t Register_FIFO_STATUS = 0x17;
 
 // Bitflags
-  typedef uint8_t BitPos_t;
   static const BitPos_t BitPos_MASK_RX_DR  = 6;
   static const BitPos_t BitPos_MASK_TX_DS  = 5;
   static const BitPos_t BitPos_MASK_MAX_RT = 4;
@@ -59,7 +79,6 @@
   static const BitPos_t BitPos_RX_DR       = 6;
   static const BitPos_t BitPos_TX_DS       = 5;
   static const BitPos_t BitPos_MAX_RT      = 4;
-  static const BitPos_t BitPos_RX_P_NO     = 1;
   // The TX_FULL flag is in different positions in the STATUS and FIFO_STATUS registers.
   static const BitPos_t BitPos_STATUS_TX_FULL = 0;
   static const BitPos_t BitPos_FIFO_TX_FULL = 5;
@@ -69,59 +88,62 @@
   static const BitPos_t BitPos_TX_EMPTY    = 4;
   static const BitPos_t BitPos_RX_FULL     = 1;
   static const BitPos_t BitPos_RX_EMPTY    = 0;
+  static const BitPos_t BitPos_RX_P_NO     = 1;
 
-  typedef uint8_t Bit_t;
-  static const Bit_t Bit_MASK_RX_DR  = _BV(BitPos_MASK_RX_DR);
-  static const Bit_t Bit_MASK_TX_DS  = _BV(BitPos_MASK_TX_DS);
-  static const Bit_t Bit_MASK_MAX_RT = _BV(BitPos_MASK_MAX_RT);
-  static const Bit_t Bit_EN_CRC      = _BV(BitPos_EN_CRC);
-  static const Bit_t Bit_CRCO        = _BV(BitPos_CRCO);
-  static const Bit_t Bit_PWR_UP      = _BV(BitPos_PWR_UP);
-  static const Bit_t Bit_PRIM_RX     = _BV(BitPos_PRIM_RX);
-  static const Bit_t Bit_ENAA_P5     = _BV(BitPos_ENAA_P5);
-  static const Bit_t Bit_ENAA_P4     = _BV(BitPos_ENAA_P4);
-  static const Bit_t Bit_ENAA_P3     = _BV(BitPos_ENAA_P3);
-  static const Bit_t Bit_ENAA_P2     = _BV(BitPos_ENAA_P2);
-  static const Bit_t Bit_ENAA_P1     = _BV(BitPos_ENAA_P1);
-  static const Bit_t Bit_ENAA_P0     = _BV(BitPos_ENAA_P0);
-  static const Bit_t Bit_ERX_P5      = _BV(BitPos_ERX_P5);
-  static const Bit_t Bit_ERX_P4      = _BV(BitPos_ERX_P4);
-  static const Bit_t Bit_ERX_P3      = _BV(BitPos_ERX_P3);
-  static const Bit_t Bit_ERX_P2      = _BV(BitPos_ERX_P2);
-  static const Bit_t Bit_ERX_P1      = _BV(BitPos_ERX_P1);
-  static const Bit_t Bit_ERX_P0      = _BV(BitPos_ERX_P0);
-  static const Bit_t Bit_AW          = _BV(BitPos_AW);
-  static const Bit_t Bit_ARD         = _BV(BitPos_ARD);
-  static const Bit_t Bit_ARC         = _BV(BitPos_ARC);
-  static const Bit_t Bit_PLL_LOCK    = _BV(BitPos_PLL_LOCK);
-  static const Bit_t Bit_RF_DR       = _BV(BitPos_RF_DR);
-  static const Bit_t Bit_RF_PWR      = _BV(BitPos_RF_PWR);
-  static const Bit_t Bit_LNA_HCURR   = _BV(BitPos_LNA_HCURR);
-  static const Bit_t Bit_RX_DR       = _BV(BitPos_RX_DR);
-  static const Bit_t Bit_TX_DS       = _BV(BitPos_TX_DS);
-  static const Bit_t Bit_MAX_RT      = _BV(BitPos_MAX_RT);
-  static const Bit_t Bit_RX_P_NO     = _BV(BitPos_RX_P_NO);
+  static const BitMask_t Bit_MASK_RX_DR  = _BV(BitPos_MASK_RX_DR);
+  static const BitMask_t Bit_MASK_TX_DS  = _BV(BitPos_MASK_TX_DS);
+  static const BitMask_t Bit_MASK_MAX_RT = _BV(BitPos_MASK_MAX_RT);
+  static const BitMask_t Bit_EN_CRC      = _BV(BitPos_EN_CRC);
+  static const BitMask_t Bit_CRCO        = _BV(BitPos_CRCO);
+  static const BitMask_t Bit_PWR_UP      = _BV(BitPos_PWR_UP);
+  static const BitMask_t Bit_PRIM_RX     = _BV(BitPos_PRIM_RX);
+  static const BitMask_t Bit_ENAA_P5     = _BV(BitPos_ENAA_P5);
+  static const BitMask_t Bit_ENAA_P4     = _BV(BitPos_ENAA_P4);
+  static const BitMask_t Bit_ENAA_P3     = _BV(BitPos_ENAA_P3);
+  static const BitMask_t Bit_ENAA_P2     = _BV(BitPos_ENAA_P2);
+  static const BitMask_t Bit_ENAA_P1     = _BV(BitPos_ENAA_P1);
+  static const BitMask_t Bit_ENAA_P0     = _BV(BitPos_ENAA_P0);
+  static const BitMask_t Bit_ERX_P5      = _BV(BitPos_ERX_P5);
+  static const BitMask_t Bit_ERX_P4      = _BV(BitPos_ERX_P4);
+  static const BitMask_t Bit_ERX_P3      = _BV(BitPos_ERX_P3);
+  static const BitMask_t Bit_ERX_P2      = _BV(BitPos_ERX_P2);
+  static const BitMask_t Bit_ERX_P1      = _BV(BitPos_ERX_P1);
+  static const BitMask_t Bit_ERX_P0      = _BV(BitPos_ERX_P0);
+  static const BitMask_t Bit_AW          = _BV(BitPos_AW);
+  static const BitMask_t Bit_ARD         = _BV(BitPos_ARD);
+  static const BitMask_t Bit_ARC         = _BV(BitPos_ARC);
+  static const BitMask_t Bit_PLL_LOCK    = _BV(BitPos_PLL_LOCK);
+  static const BitMask_t Bit_RF_DR       = _BV(BitPos_RF_DR);
+  static const BitMask_t Bit_RF_PWR      = _BV(BitPos_RF_PWR);
+  static const BitMask_t Bit_LNA_HCURR   = _BV(BitPos_LNA_HCURR);
+  static const BitMask_t Bit_RX_DR       = _BV(BitPos_RX_DR);
+  static const BitMask_t Bit_TX_DS       = _BV(BitPos_TX_DS);
+  static const BitMask_t Bit_MAX_RT      = _BV(BitPos_MAX_RT);
+  static const BitMask_t Bit_RX_P_NO     = _BV(BitPos_RX_P_NO);
   // The TX_FULL flag is in different positions in the STATUS and FIFO_STATUS registers.
-  static const Bit_t Bit_STATUS_TX_FULL = _BV(BitPos_STATUS_TX_FULL);
-  static const Bit_t Bit_FIFO_TX_FULL = _BV(BitPos_FIFO_TX_FULL);
-  static const Bit_t Bit_PLOS_CNT    = _BV(BitPos_PLOS_CNT);
-  static const Bit_t Bit_ARC_CNT     = _BV(BitPos_ARC_CNT);
-  static const Bit_t Bit_TX_REUSE    = _BV(BitPos_TX_REUSE);
-  static const Bit_t Bit_TX_EMPTY    = _BV(BitPos_TX_EMPTY);
-  static const Bit_t Bit_RX_FULL     = _BV(BitPos_RX_FULL);
-  static const Bit_t Bit_RX_EMPTY    = _BV(BitPos_RX_EMPTY);
+  static const BitMask_t Bit_STATUS_TX_FULL = _BV(BitPos_STATUS_TX_FULL);
+  static const BitMask_t Bit_FIFO_TX_FULL = _BV(BitPos_FIFO_TX_FULL);
+  static const BitMask_t Bit_PLOS_CNT    = _BV(BitPos_PLOS_CNT);
+  static const BitMask_t Bit_ARC_CNT     = _BV(BitPos_ARC_CNT);
+  static const BitMask_t Bit_TX_REUSE    = _BV(BitPos_TX_REUSE);
+  static const BitMask_t Bit_TX_EMPTY    = _BV(BitPos_TX_EMPTY);
+  static const BitMask_t Bit_RX_FULL     = _BV(BitPos_RX_FULL);
+  static const BitMask_t Bit_RX_EMPTY    = _BV(BitPos_RX_EMPTY);
 
+  static const BitMask_t BitMask_RX_P_NO_Empty = 0b1110;
+  static const BitMask_t BitMask_ARC           = 0x0F;
+  static const BitMask_t BitMask_PLOS_CNT      = 0xF0;
+  static const BitMask_t BitMask_ARC_CNT       = 0x0F;
 
 // Opcodes
-  typedef uint8_t Opcode_t;
-  static const Opcode_t Opcode_READ_REGISTER    = 0x00;
-  static const Opcode_t Opcode_WRITE_REGISTER    = 0x20;
-  static const Opcode_t Opcode_REGISTER_MASK = 0x1F;
-  static const Opcode_t Opcode_R_RX_PAYLOAD  = 0x61;
-  static const Opcode_t Opcode_W_TX_PAYLOAD  = 0xA0;
-  static const Opcode_t Opcode_FLUSH_TX      = 0xE1;
-  static const Opcode_t Opcode_FLUSH_RX      = 0xE2;
-  static const Opcode_t Opcode_REUSE_TX_PL   = 0xE3;
-  static const Opcode_t Opcode_NOP           = 0xFF;
+  static const Opcode_t Opcode_READ_REGISTER  = 0x00;
+  static const Opcode_t Opcode_WRITE_REGISTER = 0x20;
+  static const Opcode_t Opcode_REGISTER_MASK  = 0x1F;
+  static const Opcode_t Opcode_R_RX_PAYLOAD   = 0x61;
+  static const Opcode_t Opcode_W_TX_PAYLOAD   = 0xA0;
+  static const Opcode_t Opcode_FLUSH_TX       = 0xE1;
+  static const Opcode_t Opcode_FLUSH_RX       = 0xE2;
+  static const Opcode_t Opcode_REUSE_TX_PL    = 0xE3;
+  static const Opcode_t Opcode_NOP            = 0xFF;
 //}
 
