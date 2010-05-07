@@ -3,14 +3,18 @@
 
   static const uint8_t AddressSize_Min = 3;
   static const uint8_t AddressSize_Max = 5;
+
   static const uint8_t ACK_Rx_Pipe = 0;
+  static const uint8_t Pipe_Max = 5;
+
+  static const PacketSize_t PacketSize_Max = 32;
 
   static const uint8_t CRC_Max = 2;
 
   // Auto retransmit delay. 250us units.
-  static const Delay_t AutoRetransmitDelay_Max = 15;
+  static const ARD_t AutoRetransmitDelay_Max = 15;
   // Auto retransmit count. 0 is effectively disabled.
-  static const Delay_t AutoRetransmitCount_Max = 15;
+  static const ARD_t AutoRetransmitCount_Max = 15;
 
   // Radio channels
   static const Channel_t Channel_Max = 127;
@@ -48,6 +52,8 @@
   static const Register_t Register_RX_PW_P4    = 0x15;
   static const Register_t Register_RX_PW_P5    = 0x16;
   static const Register_t Register_FIFO_STATUS = 0x17;
+  static const Register_t Register_DYNPD       = 0x1C;
+  static const Register_t Register_FEATURE     = 0x1D;
 
 // Bitflags
   static const BitPos_t BitPos_MASK_RX_DR  = 6;
@@ -89,6 +95,10 @@
   static const BitPos_t BitPos_RX_FULL     = 1;
   static const BitPos_t BitPos_RX_EMPTY    = 0;
   static const BitPos_t BitPos_RX_P_NO     = 1;
+  static const BitPos_t BitPos_EN_DPL      = 2;
+  static const BitPos_t BitPos_EN_ACK_PAY  = 1;
+  static const BitPos_t BitPos_EN_DYN_ACK  = 0;
+  
 
   static const BitMask_t Bit_MASK_RX_DR  = _BV(BitPos_MASK_RX_DR);
   static const BitMask_t Bit_MASK_TX_DS  = _BV(BitPos_MASK_TX_DS);
@@ -126,6 +136,9 @@
   static const BitMask_t Bit_PLOS_CNT    = _BV(BitPos_PLOS_CNT);
   static const BitMask_t Bit_ARC_CNT     = _BV(BitPos_ARC_CNT);
   static const BitMask_t Bit_TX_REUSE    = _BV(BitPos_TX_REUSE);
+  static const BitMask_t Bit_TX_EMPTY    = _BV(BitPos_TX_EMPTY);
+  static const BitMask_t Bit_RX_FULL     = _BV(BitPos_RX_FULL);
+  static const BitMask_t Bit_RX_EMPTY    = _BV(BitPos_RX_EMPTY);
   static const BitMask_t Bit_TX_EMPTY    = _BV(BitPos_TX_EMPTY);
   static const BitMask_t Bit_RX_FULL     = _BV(BitPos_RX_FULL);
   static const BitMask_t Bit_RX_EMPTY    = _BV(BitPos_RX_EMPTY);

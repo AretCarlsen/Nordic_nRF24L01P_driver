@@ -1,34 +1,13 @@
-/*
-    Copyright (c) 2007 Stefan Engelke <mbox@stefanengelke.de>
-
-    Permission is hereby granted, free of charge, to any person 
-    obtaining a copy of this software and associated documentation 
-    files (the "Software"), to deal in the Software without 
-    restriction, including without limitation the rights to use, copy, 
-    modify, merge, publish, distribute, sublicense, and/or sell copies 
-    of the Software, and to permit persons to whom the Software is 
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be 
-    included in all copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
-    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
-    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
-    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT 
-    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, 
-    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
-    DEALINGS IN THE SOFTWARE.
-
-    $Id$
-*/
+// Copyright (C) 2010, Aret N Carlsen (aretcarlsen@autonomoustools.com).
+// Nordic nRF24L01P comprehensive driver (C++).
+// Licensed under GPLv3 and later versions. See license.txt or <http://www.gnu.org/licenses/>.
 
 #pragma once
 
 #include "../globals.hpp"
 
-#include "../../AVRPin/AVRPin.hpp"
+#include "../../common/SPI/SPI.hpp"
+#include "../../common/AVRPin/AVRPin.hpp"
 
 // Maximum payload size
 #define MAX_PAYLOAD  32
@@ -43,13 +22,13 @@
 */
 
 // Poll-based. (No interrupts.)
-class Nordic_nRF24L01P : public ChannelBus {
-  AVRPin CSN_pin;
-  AVRPin CE_pin;
+class Nordic_nRF24L01P {
+  AVROutputPin &CSN_pin;
+  AVROutputPin &CE_pin;
 
 public:
 
-  Nordic_nRF24L01P(const AVROutputPin &new_CSN_pin, const AVROutputPin new_CE_pin)
+  Nordic_nRF24L01P(AVROutputPin &new_CSN_pin, AVROutputPin &new_CE_pin)
   : CSN_pin(new_CSN_pin), CE_pin(new_CE_pin)
   {
 // Initial pin states
@@ -57,6 +36,8 @@ public:
     CSN_pin.set_high();
 
     enable_features(true);
+  // Set an initial ARD of 500us.
+    set_auto_retransmit_delay(2);
   }
 
 // Register
@@ -77,9 +58,13 @@ public:
 // Modes
   typedef enum { Mode_RX, Mode_TX } Mode_t;
 // Auto retransmit delay
-  typedef uin8t_t ARD_t;
+  typedef uint8_t ARD_t;
 // Interrupts
-  typedef enum { Interrupt_RX_DR = 0, Interrupt_TX_DS = 1, Interrupt_RX_DR = 2 } Interrupt_t;
+  typedef enum { Interrupt_RX_DR = 0, Interrupt_TX_DS = 1, Interrupt_MAX_RT = 2 } Interrupt_t;
+// Packet size
+  typedef uint8_t PacketSize_t;
+// Pipe index
+  typedef uint8_t Pipe_t;
 
 // Constant definitions
   #include "Nordic_nRF24L01P_definitions.hpp"
@@ -98,26 +83,26 @@ public:
 /* REGISTER CONTROL */
 
   // Get status.
-  inline void read_status(){
+  inline uint8_t read_status(){
   // Status is returned during opcode transmission.
     CSN_pin.set_low();
   // Send an idle opcode.
-    uint8_t status = spi_transceive(Opcode_NOP);
+    uint8_t status = SPI::transceive(Opcode_NOP);
     CSN_pin.set_high();
     return status;
   }
   // Write a single register byte.
   inline void write_register(const Register_t reg, const uint8_t value){
     CSN_pin.set_low();
-    spi_transceive(Opcode_WRITE_REGISTER | (REGISTER_MASK & reg));
-    spi_transceive(value);
+    SPI::transceive(Opcode_WRITE_REGISTER | (Opcode_REGISTER_MASK & reg));
+    SPI::transceive(value);
     CSN_pin.set_high();
   }
   // Read an array of register bytes.
   inline void write_registers(const Register_t reg, uint8_t *buf, uint8_t len){
     CSN_pin.set_low();
-    spi_transceive(Opcode_WRITE_REGISTER | (REGISTER_MASK & reg));
-    spi_transmit(buf, len);
+    SPI::transceive(Opcode_WRITE_REGISTER | (Opcode_REGISTER_MASK & reg));
+    SPI::transmit(buf, len);
     CSN_pin.set_high();
   }
   // OR a single register byte with a value.
@@ -131,22 +116,24 @@ public:
   // AND or OR a single register byte with a value, where the choice is based on a bool.
   // (This is intended to set or clear certain bits within a register.)
   inline void write_register_bits(const Register_t reg, const uint8_t mask, bool value){
-    if(new_value) write_register_OR(reg, value);
+    if(value) write_register_OR(reg, value);
     else write_register_AND(reg, ~value);
   }
 
   // Read a single register byte.
-  inline void read_register(const Register_t reg) const{
+  inline uint8_t read_register(const Register_t reg) const{
     CSN_pin.set_low();
-    spi_transceive(Opcode_READ_REGISTER | (REGISTER_MASK & reg));
-    spi_transceive(value);
+    SPI::transceive(Opcode_READ_REGISTER | (Opcode_REGISTER_MASK & reg));
+    // Dummy byte
+    uint8_t value = SPI::transceive(0);
     CSN_pin.set_high();
+    return value;
   }
   // Read an array of register bytes.
   inline void read_registers(const Register_t reg, uint8_t* buf, uint8_t len) const{
     CSN_pin.set_low();
-    spi_transceive(Opcode_READ_REGISTER | (REGISTER_MASK & reg));
-    spi_receive(buf, len);
+    SPI::transceive(Opcode_READ_REGISTER | (Opcode_REGISTER_MASK & reg));
+    SPI::receive(buf, len);
     CSN_pin.set_high();
   }
 
@@ -222,11 +209,26 @@ public:
 
     write_register(Register_CONFIG, config);
   }
+  // Configure static payload size for a pipe.
+  inline void set_receive_packet_size(const Pipe_t pipe, const PacketSize_t new_packetSize){
+  // Sanity checks
+    if(pipe > Pipe_Max || new_packetSize > PacketSize_Max) return;
+
+    write_register(Register_RX_PW_P0 + pipe, new_packetSize);
+  }
+  // Activate dynamic payload size for a pipe.
+  inline void set_dynamic_payload_allowed(const Pipe_t pipe, bool new_value){
+    write_register_bits(Register_DYNPD, Bit_DPL_P5, new_value);
+  }
+  // Activate all dynamic payloads
+  inline void set_all_dynamic_payloads_allowed(bool new_value){
+    write_register_bits(Register_DYNPD, Bit_DPL_P5 | DPL_P4 | DPL_P3 | DPL_P2 | DPL_P1 | DPL_P0, new_value);
+  }
   // Enable/disable auto ACK for a pipe.
     // Note that auto ACK is incompatible with the nRF24L01 (without the +).
-  inline void set_auto_acknowledge(const uint8_t pipe, const bool new_value){
+  inline void set_auto_acknowledge(const Pipe_t pipe, const bool new_value){
   // Sanity check
-    if(pipe > 5) return;
+    if(pipe > Pipe_Max) return;
   // Could use a switch statement to pick up the individual definitions.
   // However, they are all lined up in the register anyway, and the sanity check already happened.
     write_register_bits(Register_EN_AA, Bit_ENAA_P0 << pipe, new_value);
@@ -291,31 +293,36 @@ public:
     write_register(Register_RF_SETUP, rf_setup);
   }
 
+  // Received Power Detector (RPD)
+  bool read_received_power_detector(){
+    return read_register(Register_RPD);
+  }
+
 /* ADDRESS CONTROL */
   inline void set_address_size(uint8_t new_size){
   // Clamp to limits
-    if(new_size < MinAddressSize) new_size = MinAddressSize;
-    else if(new_size > MaxAddressSize) new_size = MaxAddressSize;
+    if(new_size < AddressSize_Min) new_size = AddressSize_Min;
+    else if(new_size > AddressSize_Max) new_size = AddressSize_Max;
   // Register contains address size, offset by 1.
     write_register(Register_SETUP_AW, new_size + 1);
   }
   inline void write_address(const uint8_t reg, uint8_t* new_address, const uint8_t len){
   // Trim size to maximum address size.
-    if(len > MaxAddressSize) len = MaxAddressSize; // new_address += MaxAddressSize - len;
+    if(len > AddressSize_Max) len = AddressSize_Max; // new_address += AddressSize_Max - len;
 
     CSN_pin.set_low();
 
   // Opcode
-    spi_transceive(Opcode_WRITE_REGISTER | (Opcode_REGISTER_MASK & reg));
+    SPI::transceive(Opcode_WRITE_REGISTER | (Opcode_REGISTER_MASK & reg));
     uint8_t i = 0;
   // Write the actual data
     for(; i < len; i++){
-      spi_transceive(new_address);
+      SPI::transceive(new_address);
       new_address++;
     }
   // Write the zero'd MSBs, if any
-    for(; i < MaxAddressSize; i++)
-      spi_transceive(0);
+    for(; i < AddressSize_Max; i++)
+      SPI::transceive(0);
 
     CSN_pin.set_high();
   }
@@ -337,7 +344,11 @@ public:
   }
   // Set the receive address for a pipe from an array of bytes.
   inline void set_RX_address(uint8_t pipe, uint8_t* const new_address, const uint8_t len){
-    write_address(Register_RX_ADDR, new_address, len); 
+  // Sanity checks
+    if(len > AddressSize_Max || pipe > Pipe_Max) return;
+  // Pipes >= 2 only contain one byte.
+    if(pipe >= 2) write_register(Register_RX_ADDR_P0 + pipe, *new_address);
+    write_address(Register_RX_ADDR_P0 + pipe, new_address, len); 
   }
   // Set receive address from a 32-bit unsigned int, rather than an array.
   inline void set_RX_address(uint8_t pipe, const uint32_t &new_address){
@@ -346,7 +357,7 @@ public:
   }
   inline void set_RX_pipe_enabled(uint8_t pipe, bool new_value){
   // Sanity check
-    if(pipe > 5) return;
+    if(pipe > Pipe_Max) return;
   // Could use a switch statement to pick up the individual definitions.
   // However, they are all lined up in the register anyway, and the sanity check already happened.
     write_register_bits(Register_EN_RXADDR, ERX_P0 << pipe, new_value);
@@ -355,24 +366,27 @@ public:
 /* FIFO CONTROL */
   // In TX mode, add a packet to the outgoing queue. The argument determines whether an ACK is requested.
   // In RX mode, add a packet to the ACK-payload outgoing queue. (Ack_requested argument is ignored.)
-  inline void queue_TX_packet(const uint8_t buf, const uint8_t buf_len, bool ack_requested = true){
+  inline void queue_TX_packet(const uint8_t* buf, const uint8_t buf_len, bool ack_requested = true){
+    if(buf_len > PacketSize_Max) buf_len = PacketSize_Max;
+
     CSN_pin.set_low();
   // Opcode depends on ACK preference.
-    spi_transceive(ack_requested? Opcode_W_TX_PAYLOAD : W_TX_PAYLOAD_NOACK);
+    SPI::transceive(ack_requested? Opcode_W_TX_PAYLOAD : W_TX_PAYLOAD_NOACK);
   // Send packet payload.
-    spi_transceive(buf, len); 
+    SPI::transceive(buf, buf_len); 
     CSN_pin.set_high();
   }
   // Queue an outgoing RX packet (ACK payload), associated with a specific address/pipe.
-  inline void queue_RX_packet(const uint8_t buf, const uint8_t buf_len, const Pipe_t rx_pipe){
+  inline void queue_RX_packet(const uint8_t* buf, const uint8_t buf_len, const Pipe_t rx_pipe){
     // Ignore if RX pipe out of bounds
     if(rx_pipe > Pipe_Max) return;
+    if(buf_len > PacketSize_Max) buf_len = PacketSize_Max;
 
     CSN_pin.set_low();
   // Specify pipe with opcode.
-    spi_transceive(Opcode_W_ACK_PAYLOAD | rx_pipe);
+    SPI::transceive(Opcode_W_ACK_PAYLOAD | rx_pipe);
   // Send packet payload.
-    spi_transceive(buf, len);
+    SPI::transceive(buf, buf_len);
     CSN_pin.set_high();
   }
   // Transmit a single packet. Does nothing if transmission is already in progress, in RX mode, or if
@@ -381,10 +395,10 @@ public:
     strobe_CE();
   }
   // Reuse the last transmitted payload.
-  // Reuse continues until queue_packet() or flush_transmit_buffer() is called.
+  // Reuse continues until queue_TX_packet() or flush_transmit_buffer() is called.
   inline void transmit_reused(){
     CSN_pin.set_low();
-    spi_transceive(Opcode_REUSE_TX_PL);
+    SPI::transceive(Opcode_REUSE_TX_PL);
     CSN_pin.set_high();
   }
 
@@ -392,18 +406,19 @@ public:
   // Returns 0 if no packet?
   inline uint8_t read_received_packet_size(){
     CSN_pin.set_low();
-    uint8_t size = spi_transceive(Opcode_R_RX_PL_WID);
+    uint8_t size = SPI::transceive(Opcode_R_RX_PL_WID);
     CSN_pin.set_high(); 
     return size; 
   }
   // Receive a packet. Returns the packet size (or 0 if none received).
   // Will read buf_len or packet_size bytes, whichever is shorter.
-  inline uint8_t receive_packet(uint8_t *buf, uint8_t buf_len = 32, uint8_t &rx_pipe){
+  inline uint8_t receive_packet(uint8_t &rx_pipe, uint8_t *buf, uint8_t buf_len = 32){
     uint8_t packet_size = read_received_packet_size();
   // No packet?
     if(packet_size == 0) return 0;
   // Invalid packet?  (See datasheet.)
     if(packet_size > 32){
+      // This may interrupt ACKs...
       flush_receive_buffer();
       return 0;
     }
@@ -415,8 +430,8 @@ public:
     if(packet_size > buf_len) packet_size = buf_len;
   // Receive packet.
     CSN_pin.set_low();
-    spi_transceive(Opcode_R_RX_PAYLOAD); 
-    spi_transceive(buf, buf_len); 
+    SPI::transceive(Opcode_R_RX_PAYLOAD); 
+    SPI::transceive(buf, buf_len); 
     CSN_pin.set_high();
 
     return packet_size;
@@ -424,7 +439,7 @@ public:
   // rx_pipe default parameter.
   inline uint8_t receive_packet(uint8_t *buf, uint8_t buf_len = 32){
     uint8_t rx_pipe;
-    return receive_packet(buf, buf_len, rx_pipe);
+    return receive_packet(rx_pipe, buf, buf_len);
   }
 
   // Check whether the transmission packet FIFO is full.
@@ -438,7 +453,7 @@ public:
   // Flush the transmission FIFO.
   inline void flush_transmit_buffer(){
     CSN_pin.set_low();
-    spi_transceive(Opcode_FLUSH_TX);
+    SPI::transceive(Opcode_FLUSH_TX);
     CSN_pin.set_high();
   }
 
@@ -459,7 +474,7 @@ public:
   // Flush the reception FIFO. Note that this may corrupt any ACKs in progress.
   inline void flush_receive_buffer(){
     CSN_pin.set_low();
-    spi_transceive(Opcode_FLUSH_RX);
+    SPI::transceive(Opcode_FLUSH_RX);
     CSN_pin.set_high();
   }
 };
