@@ -6,18 +6,22 @@
 
 #include "../globals.hpp"
 
-#include "../../common/SPI/SPI.hpp"
+#include "../SPI/SPI.hpp"
 
+//template <typename CSN_pin_t, typename CE_pin_t>
 template <typename CSN_pin_t, typename CE_pin_t>
 class Nordic_nRF24L01P {
-  CSN_pin_t &CSN_pin;
-  CE_pin_t &CE_pin;
+private:
+  // Driver is poll-based. (No interrupts.) Therefore, only CSN and CE pins are required.
+  CSN_pin_t CSN_pin;
+  CE_pin_t CE_pin;
 
 public:
 
-  // Driver is poll-based. (No interrupts.) Therefore, only CSN and CE pins are required.
   Nordic_nRF24L01P(CSN_pin_t &new_CSN_pin, CE_pin_t &new_CE_pin)
   : CSN_pin(new_CSN_pin), CE_pin(new_CE_pin)
+  { }
+  Nordic_nRF24L01P()
   { }
 
   // Register/Bit
@@ -74,6 +78,7 @@ public:
   inline uint8_t read_status();
   // Write a single register byte.
   inline void write_register(const Register_t reg, const uint8_t value);
+
   // Read an array of register bytes.
   inline void write_registers(const Register_t reg, uint8_t *buf, uint8_t len);
   // OR a single register byte with a value.
