@@ -5,10 +5,10 @@
 #include "../globals.hpp"
 #include "Nordic_nRF24L01P.hpp"
 
-void Nordic_nRF24L01P::init(bool power_up){
+template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF24L01P<CSN_pin_t, CE_pin_t>::init(bool power_up){
   // Initial pin states.
-  CE_pin.set_low();
-  CSN_pin.set_high();
+  CE_pin.set_output_low();
+  CSN_pin.set_output_high();
 
   // Power up, if desired.
   if(power_up) set_power_state(true);
@@ -19,11 +19,11 @@ void Nordic_nRF24L01P::init(bool power_up){
   set_auto_retransmit_delay(ARD_Default);
 }
 
-void Nordic_nRF24L01P::write_address(const uint8_t reg, const uint8_t* new_address, uint8_t len){
+template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF24L01P<CSN_pin_t, CE_pin_t>::write_address(const uint8_t reg, const uint8_t* new_address, uint8_t len){
   // Trim size to maximum address size.
   if(len > AddressSize_Max) len = AddressSize_Max; // new_address += AddressSize_Max - len;
 
-  CSN_pin.set_low();
+  CSN_pin.set_output_low();
 
   // Opcode
   SPI::transceive(Opcode_WRITE_REGISTER | (Opcode_REGISTER_MASK & reg));
@@ -37,10 +37,10 @@ void Nordic_nRF24L01P::write_address(const uint8_t reg, const uint8_t* new_addre
   for(; i < AddressSize_Max; i++)
     SPI::transceive(0);
 
-  CSN_pin.set_high();
+  CSN_pin.set_output_high();
 }
 
-void Nordic_nRF24L01P::set_TX_address(uint8_t* new_address, const uint8_t len, const bool set_matching_ACK){
+template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF24L01P<CSN_pin_t, CE_pin_t>::set_TX_address(uint8_t* new_address, const uint8_t len, const bool set_matching_ACK){
   write_address(Register_TX_ADDR, new_address, len);
 
   // Set ACK receive pipe to matching address, if desired.
@@ -50,7 +50,7 @@ void Nordic_nRF24L01P::set_TX_address(uint8_t* new_address, const uint8_t len, c
   }
 }
 
-void Nordic_nRF24L01P::set_RX_address(const uint8_t* new_address, const uint8_t len, bool enable_pipe, uint8_t pipe){
+template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF24L01P<CSN_pin_t, CE_pin_t>::set_RX_address(const uint8_t* new_address, const uint8_t len, bool enable_pipe, uint8_t pipe){
   // Sanity checks
   if(len > AddressSize_Max || pipe > Pipe_Max) return;
   // Pipes >= 2 only contain one byte.
@@ -60,16 +60,16 @@ void Nordic_nRF24L01P::set_RX_address(const uint8_t* new_address, const uint8_t 
   if(enable_pipe) set_RX_pipe_enabled(true, pipe);
 }
 
-void Nordic_nRF24L01P::queue_packet(const uint8_t opcode, const uint8_t* buf, uint8_t buf_len){
-  CSN_pin.set_low();
+template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF24L01P<CSN_pin_t, CE_pin_t>::queue_packet(const uint8_t opcode, const uint8_t* buf, uint8_t buf_len){
+  CSN_pin.set_output_low();
   SPI::transceive(opcode);
   // Send packet payload.
   SPI::transmit(buf, buf_len);
-  CSN_pin.set_high();
+  CSN_pin.set_output_high();
 }
 
 // Receive a packet. Returns packet payload size.
-uint8_t Nordic_nRF24L01P::receive_packet(uint8_t *buf, uint8_t buf_len){
+template <typename CSN_pin_t, typename CE_pin_t> uint8_t Nordic_nRF24L01P<CSN_pin_t, CE_pin_t>::receive_packet(uint8_t *buf, uint8_t buf_len){
   uint8_t packet_size = read_received_packet_size();
   if(packet_size == 0) return 0;
   // Invalid packet?  (See datasheet.)
@@ -83,15 +83,15 @@ uint8_t Nordic_nRF24L01P::receive_packet(uint8_t *buf, uint8_t buf_len){
   if(packet_size > buf_len) packet_size = buf_len;
 
   // Receive packet.
-  CSN_pin.set_low();
+  CSN_pin.set_output_low();
   SPI::transceive(Opcode_R_RX_PAYLOAD);
   SPI::receive(buf, buf_len);
-  CSN_pin.set_high();
+  CSN_pin.set_output_high();
 
   return packet_size;
 }
 
-bool Nordic_nRF24L01P::receive_packet(ReceivedPacket &packet){
+template <typename CSN_pin_t, typename CE_pin_t> bool Nordic_nRF24L01P<CSN_pin_t, CE_pin_t>::receive_packet(ReceivedPacket &packet){
   // Save the received packet pipe.
   packet.rx_pipe = read_received_packet_pipe();
   // Sanity check (e.g. no packet pending).

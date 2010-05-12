@@ -7,18 +7,16 @@
 #include "../globals.hpp"
 
 #include "../../common/SPI/SPI.hpp"
-#include "../../common/AVRPin/AVRPin.hpp"
 
+template <typename CSN_pin_t, typename CE_pin_t>
 class Nordic_nRF24L01P {
-  // The CSN and CE pins definitions are kept in RAM (rather than Flash) to facilitate
-  // communication among several MIRFs.
-  AVROutputPin &CSN_pin;
-  AVROutputPin &CE_pin;
+  CSN_pin_t &CSN_pin;
+  CE_pin_t &CE_pin;
 
 public:
 
   // Driver is poll-based. (No interrupts.) Therefore, only CSN and CE pins are required.
-  Nordic_nRF24L01P(AVROutputPin &new_CSN_pin, AVROutputPin &new_CE_pin)
+  Nordic_nRF24L01P(CSN_pin_t &new_CSN_pin, CE_pin_t &new_CE_pin)
   : CSN_pin(new_CSN_pin), CE_pin(new_CE_pin)
   { }
 
@@ -100,7 +98,7 @@ public:
   // True = powered up, False = powered down.
   inline void set_power_state(bool new_value);
   // True = chip enabled (CE high); false = chip disabled (CE low).
-  inline void set_chip_enabled(bool new_value){ CE_pin.set_value(new_value); }
+  inline void set_chip_enabled(bool new_value){ if(new_value) CE_pin.set_output_high(); else CE_pin.set_output_low(); }
   // Enable/disable which interrupts show up on the IRQ pin. (True = enabled, false = masked.)
     // Inverted, because bit actually indicates masked interrupt.
   inline void set_interrupt_pin(Interrupt_t interrupt, bool new_value){ write_register_bits(Register_CONFIG, _BV(Bit_MAX_RT) << interrupt, ~new_value); }
