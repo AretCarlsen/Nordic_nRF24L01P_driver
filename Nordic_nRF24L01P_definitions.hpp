@@ -1,3 +1,7 @@
+// Copyright (C) 2010, Aret N Carlsen (aretcarlsen@autonomoustools.com).
+// Nordic nRF24L01P comprehensive driver (C++).
+// Licensed under GPLv3 and later versions. See license.txt or <http://www.gnu.org/licenses/>.
+
 
 //namespace Nordic_nRF24L01P {
 
@@ -28,6 +32,8 @@
 
 // Much underlying data from Stefan Engelke <mbox@stefanengelke.de>, 2007.
 // Registers
+  static const Register_t Register_Max         = 0x1D;
+
   static const Register_t Register_CONFIG      = 0x00;
   static const Register_t Register_EN_AA       = 0x01;
   static const Register_t Register_EN_RXADDR   = 0x02;
