@@ -44,18 +44,18 @@ struct ReceivedPacket{
   typedef uint8_t PowerUpDelay_t;
 
 
-//template <typename CSN_pin_t, typename CE_pin_t>
-template <typename CSN_pin_t, typename CE_pin_t>
+template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t>
 class nRF24L01P {
 private:
   // Driver is poll-based. (No interrupts.) Therefore, only CSN and CE pins are required.
   CSN_pin_t CSN_pin;
   CE_pin_t CE_pin;
+  SPI_bus_t SPI_bus;
 
 public:
 
-  nRF24L01P(CSN_pin_t &new_CSN_pin, CE_pin_t &new_CE_pin)
-  : CSN_pin(new_CSN_pin), CE_pin(new_CE_pin)
+  nRF24L01P(CSN_pin_t &new_CSN_pin, CE_pin_t &new_CE_pin, SPI_bus_t &new_SPI_bus)
+  : CSN_pin(new_CSN_pin), CE_pin(new_CE_pin), SPI_bus(&new_SPI_bus)
   { }
   nRF24L01P()
   { }
