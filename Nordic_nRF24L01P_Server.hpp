@@ -41,6 +41,7 @@ bool nRF24L01P_Server<MIRF_t>::replyReceivedPacket(ReceivedPacket &rPacket){
   return sendPacket(replyPacket);
 }
 
+/*
 namespace outside{
 inline bool replyBoolean(bool val){
   DEBUGprint_NRF("nB:");
@@ -52,6 +53,7 @@ inline bool replyBoolean(bool val){
   return true;
 }
 }
+*/
 
 template <typename MIRF_t>
 Status::Status_t nRF24L01P_Server<MIRF_t>::process(){
@@ -69,7 +71,7 @@ Status::Status_t nRF24L01P_Server<MIRF_t>::process(){
   uint8_t *packetBack = offsetPacket.packet->back();
   uint8_t opcode = *packetData;
   packetData++;
-  DEBUGprint_NRF("n-op:%d;", opcode);
+  DEBUGprint_NRF("n-op2:%d;", opcode);
   switch(opcode){
   /* CONFIGURATION CONTROL */
     case 0: { // set_mode(enum)
@@ -85,15 +87,15 @@ Status::Status_t nRF24L01P_Server<MIRF_t>::process(){
     OPCODE(3) // clear_all_interrupts()
       mirf->clear_all_interrupts();
     OPCODE(4) // bool check_packet_transmitted()
-      return outside::replyBoolean(mirf->check_packet_transmitted());
+      replyBoolean(mirf->check_packet_transmitted());
     OPCODE(5) // clear_packet_transmitted()
       mirf->clear_packet_transmitted();
     OPCODE(6) // bool check_maximum_retries_reached()
-      return outside::replyBoolean(mirf->check_maximum_retries_reached());
+      replyBoolean(mirf->check_maximum_retries_reached());
     OPCODE(7) // clear_maximum_retries_reached()
       mirf->clear_maximum_retries_reached();
     OPCODE(8) // bool check_packet_received()
-      return outside::replyBoolean(mirf->check_packet_received());
+      replyBoolean(mirf->check_packet_received());
     OPCODE(9) // clear_packet_received()
       mirf->clear_packet_received();
 
@@ -141,7 +143,7 @@ Status::Status_t nRF24L01P_Server<MIRF_t>::process(){
       else break;
       mirf->set_data_rate(new_rate);
     OPCODE(20) // bool read_received_power_detector()
-      outside::replyBoolean(mirf->read_received_power_detector());
+      replyBoolean(mirf->read_received_power_detector());
 
  /* ADDRESS CONTROL */
     OPCODE(21) // set_address_size(uint8_t)
@@ -183,7 +185,9 @@ Status::Status_t nRF24L01P_Server<MIRF_t>::process(){
   /* FIFO CONTROL */
     OPCODE(27) // queue_TX_packet(const uint8_t* buf, uint8_t buf_len, const bool ack_requested = true)
       GET_RAW_C78String(packetBuf, len, MIRF_t::PacketSize_Max);
-      bool ackRequested = true; offsetPacket.packet->sourceBool(ackRequested, packetData);
+      bool ackRequested = true;
+      bool ret = offsetPacket.packet->sourceBool(ackRequested, packetData);
+      DEBUGprint_NRF("nQ:r%d,b%d;", ret? 1:0, ackRequested? 1:0);
       mirf->queue_TX_packet(packetBuf, len, ackRequested);
     OPCODE(28) // queue_RX_packet(const uint8_t* buf, uint8_t buf_len, const Pipe_t rx_pipe = Pipe_RX_Default)
       GET_RAW_C78String(packetBuf, len, MIRF_t::PacketSize_Max);
@@ -204,27 +208,34 @@ Status::Status_t nRF24L01P_Server<MIRF_t>::process(){
       mirf->receive_packet(rPacket);
       replyReceivedPacket(rPacket);
     OPCODE(33) // bool transmit_buffer_full()
-      bool resp = mirf->transmit_buffer_full();
-      DEBUGprint_NRF("n-r:%c;", resp? 'T':'F');
-      outside::replyBoolean(resp);
+      replyBoolean(mirf->transmit_buffer_full());
     OPCODE(34) // bool transmit_buffer_empty()
-      bool resp = mirf->transmit_buffer_empty();
-      DEBUGprint_NRF("n-r:%c;", resp? 'T':'F');
-      outside::replyBoolean(resp);
+      replyBoolean(mirf->transmit_buffer_empty());
     OPCODE(35) // flush_transmit_buffer()
       mirf->flush_transmit_buffer();
     OPCODE(36) // bool receive_buffer_full()
-      outside::replyBoolean(mirf->receive_buffer_full());
+      replyBoolean(mirf->receive_buffer_full());
     OPCODE(37) // bool receive_buffer_empty()
-      outside::replyBoolean(mirf->receive_buffer_empty());
+      replyBoolean(mirf->receive_buffer_empty());
     OPCODE(38) // uint8_t read_received_packet_pipe()
       replyC78(mirf->read_received_packet_pipe());
     OPCODE(39) // flush_receive_buffer()
-      outside::replyBoolean(mirf->receive_buffer_empty());
-    break; }
+      replyBoolean(mirf->receive_buffer_empty());
+
+    OPCODE(40) // uint8_t read_status()
+      replyC78(mirf->read_status());
+    OPCODE(41) // uint8_t read_register(uint8_t reg)
+      GET_RAW_UINT(reg);
+      replyC78(mirf->read_register(reg));
+    OPCODE(42) // dump_registers(uint8_t *buf)
+      uint8_t buf[MIRF_t::DumpSize];
+      mirf->dump_registers(buf);
+      replyC78String(buf, MIRF_t::DumpSize);
+    } break;
   }
 
-  return finishedWithPacket();
+  finishedWithPacket();
+  return Status::Status__Good;
 }
 
 // End namespace: Nordic_nRF

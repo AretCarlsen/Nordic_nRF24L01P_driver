@@ -30,6 +30,10 @@
   static const Gain_t Gain_Min = -18;
   static const Gain_t Gain_Max = 0;
 
+  // Register dump size (total of readable registers)
+  // 0x17 + 3 (for 0x00, 0x1C, 0x1D) + 3*4 (for the three 5-byte address registers)
+  static const uint8_t DumpSize = 38;
+
 // Much underlying data from Stefan Engelke <mbox@stefanengelke.de>, 2007.
 // Registers
   static const Register_t Register_Max         = 0x1D;

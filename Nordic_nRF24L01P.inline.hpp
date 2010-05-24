@@ -29,6 +29,14 @@ template <typename CSN_pin_t, typename CE_pin_t> uint8_t Nordic_nRF::nRF24L01P<C
   DEBUGprint_NRF("Rdreg st val X%x;", status);
   return status;
 }
+// Get the size of a register (in bytes).
+template <typename CSN_pin_t, typename CE_pin_t> uint8_t Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::register_size(const Register_t reg) const{
+  // Most registers are one byte.
+  uint8_t regLen = 1;
+  // RX0, RX1, and TX address registers are 5 bytes.
+  if(reg == 0x0A || reg == 0x0B || reg == 0x10) regLen = 5;
+  return regLen;
+}
 // Write a register.
 template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::write_register(const Register_t reg, const uint8_t value){
   // Sanity check
@@ -96,6 +104,23 @@ template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_
   SPI::receive(buf, len);
   // End command.
   CSN_pin.set_output_high();
+}
+// Buffer must be of size DumpSize (36B).
+template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::dump_registers(uint8_t* buf) const{
+  for(uint8_t reg = 0; reg <= Register_Max; reg++){
+  // Registers 0x18 through 0x1B cannot be accessed with R_REGISTER.
+    if(reg == 0x18) reg = 0x1C;
+
+    uint8_t regLen = register_size(reg);
+/*
+    if(regLen == 1){
+      *buf = read_register(reg);
+      buf++;
+    }else{
+*/
+    read_registers(reg, buf, regLen);
+    buf += regLen;
+  }
 }
 
 /* CONFIGURATION CONTROL */

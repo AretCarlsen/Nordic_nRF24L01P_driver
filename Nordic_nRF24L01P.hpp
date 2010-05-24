@@ -40,6 +40,8 @@ struct ReceivedPacket{
   typedef uint8_t PacketSize_t;
   // Pipe index
   typedef uint8_t Pipe_t;
+  // Power-Up Delay (ms)
+  typedef uint8_t PowerUpDelay_t;
 
 
 //template <typename CSN_pin_t, typename CE_pin_t>
@@ -69,7 +71,7 @@ public:
   // Default auto-retransmit delay, in 250us increments.
   static const ARD_t ARD_Default = 2;
   // Power-up delay, in ms.
-  static const uint8_t PowerUp_Delay = 3;
+  static const PowerUpDelay_t PowerUp_Delay = 3;
 
   // Initialize.
   void init(bool power_up = true);
@@ -79,8 +81,11 @@ private:
   // Strobe the CE pin, e.g. to initiate a packet transmission or retransmission.
   void strobe_CE();
 
+public:
   // Get status.
   uint8_t read_status();
+  uint8_t register_size(const Register_t reg) const;
+private:
   // Write a single register byte.
   void write_register(const Register_t reg, const uint8_t value);
 
@@ -94,12 +99,18 @@ private:
   // (This is intended to set or clear certain bits within a register.)
   void write_register_bits(const Register_t reg, const uint8_t mask, bool value);
 
+public:
   // Read a single register byte.
   uint8_t read_register(const Register_t reg) const;
+private:
   // Read an array of register bytes.
   void read_registers(const Register_t reg, uint8_t* buf, uint8_t len) const;
+public:
+  // Dump all registers.
+  void dump_registers(uint8_t* buf) const;
 
 public:
+
 /* CONFIGURATION CONTROL */
   // Enable all features
     // Enable dynamic payloads, ack payloads, and per-packet ack disabling
