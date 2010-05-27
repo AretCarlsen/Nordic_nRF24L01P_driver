@@ -7,7 +7,7 @@
 #include "Nordic_nRF24L01P.inline.hpp"
 
 // Initialize MIRF. Power up, if desired.
-template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::init(bool power_up){
+template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::init(bool power_up){
   DEBUGprint_NRF("nRF: init;");
 
   // Initial pin states.
@@ -24,7 +24,7 @@ template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_
 }
 
 // Write an address to a register.
-template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::write_address(const uint8_t reg, const uint8_t* new_address, uint8_t len){
+template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::write_address(const uint8_t reg, const uint8_t* new_address, uint8_t len){
   // Sanity check
   if(reg > Register_Max) return;
   // Trim size to maximum address size.
@@ -33,24 +33,24 @@ template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_
   // Begin command.
   CSN_pin.set_output_low();
   // Opcode: write register.
-  SPI::transmit(Opcode_WRITE_REGISTER | reg);
+  SPI_bus.transmit(Opcode_WRITE_REGISTER | reg);
 
   uint8_t i = 0;
   // Write the address data LSBs.
   for(; i < len; i++){
-    SPI::transmit(*new_address);
+    SPI_bus.transmit(*new_address);
     new_address++;
   }
   // Write the zero'd MSBs, if any.
   for(; i < AddressSize_Max; i++)
-    SPI::transmit(0);
+    SPI_bus.transmit(0);
 
   // End command.
   CSN_pin.set_output_high();
 }
 
 // Set the transmit address.
-template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::set_TX_address(uint8_t* new_address, const uint8_t len, const bool set_matching_ACK){
+template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::set_TX_address(uint8_t* new_address, const uint8_t len, const bool set_matching_ACK){
   // Write the address. Address length sanity check is performed within write_address().
   write_address(Register_TX_ADDR, new_address, len);
 
@@ -64,7 +64,7 @@ template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_
 }
 
 // Set the receive address for a specific pipe.
-template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::set_RX_address(const uint8_t* new_address, const uint8_t len, bool enable_pipe, uint8_t pipe){
+template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::set_RX_address(const uint8_t* new_address, const uint8_t len, bool enable_pipe, uint8_t pipe){
   // Sanity check. Address length sanity check is performed within write_address().
   if(pipe > Pipe_Max) return;
   // Write the address registers. Pipes >= 2 only contain one byte.
@@ -75,19 +75,19 @@ template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_
 }
 
 // Queue a packet payload for transmission.
-template <typename CSN_pin_t, typename CE_pin_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::queue_packet(const uint8_t opcode, const uint8_t* buf, uint8_t buf_len){
+template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t> void Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::queue_packet(const uint8_t opcode, const uint8_t* buf, uint8_t buf_len){
   // Begin command.
   CSN_pin.set_output_low();
   // Send opcode.
-  SPI::transmit(opcode);
+  SPI_bus.transmit(opcode);
   // Send packet payload.
-  SPI::transmit(buf, buf_len);
+  SPI_bus.transmit(buf, buf_len);
   // End command.
   CSN_pin.set_output_high();
 }
 
 // Receive a packet. Returns packet payload size.
-template <typename CSN_pin_t, typename CE_pin_t> uint8_t Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::receive_packet(uint8_t *buf, uint8_t buf_len){
+template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t> uint8_t Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::receive_packet(uint8_t *buf, uint8_t buf_len){
   // Read the received packet size.
   uint8_t packet_size = read_received_packet_size();
   // Stop if packet is empty.
@@ -107,13 +107,13 @@ template <typename CSN_pin_t, typename CE_pin_t> uint8_t Nordic_nRF::nRF24L01P<C
   CSN_pin.set_output_low();
 
   // Opcode: Receive RX payload.
-  SPI::transmit(Opcode_R_RX_PAYLOAD);
+  SPI_bus.transmit(Opcode_R_RX_PAYLOAD);
   // Receive the payload response bytes.
-  SPI::receive(buf, buf_len);
+  SPI_bus.receive(buf, buf_len);
   // Trim packet size to buffer size.
     // It is not clear whether the *entire* packet needs to be read from the nRF to remove it from the RX FIFO.
     // Until sure (by testing?), read all bytes just in case.
-  for(; packet_size > buf_len; packet_size--) SPI::transmit(0);
+  for(; packet_size > buf_len; packet_size--) SPI_bus.transmit(0);
 
   // End command.
   CSN_pin.set_output_high();
@@ -123,7 +123,7 @@ template <typename CSN_pin_t, typename CE_pin_t> uint8_t Nordic_nRF::nRF24L01P<C
 }
 
 // Receive a packet, including pipe index.
-template <typename CSN_pin_t, typename CE_pin_t> bool Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::receive_packet(ReceivedPacket &packet){
+template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t> bool Nordic_nRF::nRF24L01P<CSN_pin_t, CE_pin_t>::receive_packet(ReceivedPacket &packet){
   // Save the received packet pipe.
   packet.rx_pipe = read_received_packet_pipe();
   // Sanity check (e.g. no packet pending).
