@@ -4,10 +4,6 @@
 
 #pragma once
 
-#include "../globals.hpp"
-
-#include "../SPI/SPI.hpp"
-
 namespace Nordic_nRF {
 
 // Received packet container.
