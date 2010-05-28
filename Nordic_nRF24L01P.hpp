@@ -4,9 +4,11 @@
 
 #pragma once
 
-#include "../globals.hpp"
+#ifndef DEBUGprint_NRF
+#define DEBUGprint_NRF(...)
+#endif
 
-#include "../SPI/SPI.hpp"
+#include <AVR_Hardware_Classes/spi.hpp>
 
 namespace Nordic_nRF {
 

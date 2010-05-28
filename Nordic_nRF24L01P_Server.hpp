@@ -1,5 +1,9 @@
 
-#include "../../common/Packet/Servers/SimpleServer.hpp"
+#include <Upacket/Servers/SimpleServer.hpp>
+
+#ifndef DEBUGprint
+#define DEBUGprint(...)
+#endif
 
 namespace Nordic_nRF {
 
@@ -186,7 +190,10 @@ Status::Status_t nRF24L01P_Server<MIRF_t>::process(){
     OPCODE(27) // queue_TX_packet(const uint8_t* buf, uint8_t buf_len, const bool ack_requested = true)
       GET_RAW_C78String(packetBuf, len, MIRF_t::PacketSize_Max);
       bool ackRequested = true;
-      bool ret = offsetPacket.packet->sourceBool(ackRequested, packetData);
+#ifndef DEBUGprint_NRF
+      bool ret = 
+#endif
+      offsetPacket.packet->sourceBool(ackRequested, packetData);
       DEBUGprint_NRF("nQ:r%d,b%d;", ret? 1:0, ackRequested? 1:0);
       mirf->queue_TX_packet(packetBuf, len, ackRequested);
     OPCODE(28) // queue_RX_packet(const uint8_t* buf, uint8_t buf_len, const Pipe_t rx_pipe = Pipe_RX_Default)
