@@ -8,7 +8,7 @@
 #define DEBUGprint_NRF(...)
 #endif
 
-#include <AVR_Hardware_Classes/spi.hpp>
+#include <AVR_Objects/spi.hpp>
 
 namespace Nordic_nRF {
 
