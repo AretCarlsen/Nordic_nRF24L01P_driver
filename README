@@ -1,4 +1,0 @@
-Nordic nRF24L01+ (nRF24L01P) C++ driver.
-
-Pins and SPI templated for ease of porting.
-
