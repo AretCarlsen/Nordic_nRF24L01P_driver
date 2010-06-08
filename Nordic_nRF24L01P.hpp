@@ -46,6 +46,7 @@ struct ReceivedPacket{
   typedef uint8_t PowerUpDelay_t;
 
 
+// Driver front-end. One per RF module.
 template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t>
 class nRF24L01P {
 private:
@@ -128,12 +129,12 @@ public:
   void set_interrupt_pin(Interrupt_t interrupt, bool new_value){ write_register_bits(Register_CONFIG, _BV(Bit_MAX_RT) << interrupt, ~new_value); }
   // Read an interrupt.
   bool read_interrupt(Interrupt_t interrupt){ return read_status() & (_BV(Bit_MAX_RT) << interrupt); }
-  // Clear an interrupt
+  // Clear an interrupt.
     // Interrupts are cleared by writing a 1 to their flags the STATUS register.
   void clear_interrupt(Interrupt_t interrupt){ write_register_OR(Register_STATUS, _BV(Bit_MAX_RT) << interrupt); }
   // Clear all three interrupts.
   void clear_all_interrupts(){ write_register_bits(Register_STATUS, _BV(Bit_MASK_RX_DR) | _BV(Bit_MASK_TX_DS) | _BV(Bit_MASK_MAX_RT), true); }
-  // Check interrupts
+  // Check and clear individual interrupts.
   bool check_packet_transmitted(){ return read_interrupt(Interrupt_TX_DS); }
   void clear_packet_transmitted(){ clear_interrupt(Interrupt_TX_DS); }
   bool check_maximum_retries_reached(){ return read_interrupt(Interrupt_MAX_RT); }
@@ -189,10 +190,12 @@ public:
   void set_RX_address(const uint8_t* new_address, const uint8_t len, const bool enable_pipe = true, uint8_t pipe = Pipe_RX_Default);
   // Set receive address from a 32-bit unsigned int, rather than an array.
   void set_RX_address(uint32_t const &new_address, const bool enable_pipe = true, const uint8_t pipe = Pipe_RX_Default);
+  // Enable or disable an RX pipe.
   void set_RX_pipe_enabled(const bool new_value, const uint8_t pipe = Pipe_RX_Default);
 
 /* FIFO CONTROL */
 private:
+  // Queue a packet. (Called by queue_TX_packet and queue_RX_packet after the appropriate opcodes.)
   void queue_packet(const uint8_t opcode, const uint8_t* buf, uint8_t buf_len);
 public:
   // In TX mode, add a packet to the outgoing queue. The argument determines whether an ACK is requested.

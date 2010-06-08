@@ -3,6 +3,8 @@
 // Licensed under GPLv3 and later versions. See license.txt or <http://www.gnu.org/licenses/>.
 
 #include "Nordic_nRF24L01P.hpp"
+
+// Methods which may be readily inlined are kept separate for custom .hpp file implementations.
 #include "Nordic_nRF24L01P.inline.hpp"
 
 // Initialize MIRF. Power up, if desired.
