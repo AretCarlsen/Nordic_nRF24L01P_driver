@@ -10,7 +10,7 @@
 
 #include <AVR_Objects/spi.hpp>
 
-namespace Nordic_nRF {
+namespace Nordic_nRF24L01P {
 
 // Received packet container.
 struct ReceivedPacket{
@@ -48,7 +48,7 @@ struct ReceivedPacket{
 
 // Driver front-end. One per RF module.
 template <typename CSN_pin_t, typename CE_pin_t, typename SPI_bus_t>
-class nRF24L01P {
+class Nordic_nRF24L01P {
 private:
   // Driver is poll-based. (No interrupts.) Therefore, only CSN and CE pins are required.
   CSN_pin_t CSN_pin;
@@ -57,10 +57,10 @@ private:
 
 public:
 
-  nRF24L01P(CSN_pin_t &new_CSN_pin, CE_pin_t &new_CE_pin, SPI_bus_t &new_SPI_bus)
+  Nordic_nRF24L01P(CSN_pin_t &new_CSN_pin, CE_pin_t &new_CE_pin, SPI_bus_t &new_SPI_bus)
   : CSN_pin(new_CSN_pin), CE_pin(new_CE_pin), SPI_bus(new_SPI_bus)
   { }
-  nRF24L01P()
+  Nordic_nRF24L01P()
   { }
 
   // Interrupts
@@ -183,9 +183,9 @@ private:
 public:
   // Set the transmission address from an array of bytes.
   // The second argument determines whether RX pipe 0 is set to a matching address s.t. ACKs can be received.
-  void set_TX_address(uint8_t* new_address, const uint8_t len, const bool set_matching_ACK = true);
+  void set_TX_address(const uint8_t* new_address, const uint8_t len, const bool set_matching_ACK = true);
   // Set transmission address from a 32-bit unsigned int, rather than an array.
-  void set_TX_address(uint32_t const &new_address, bool set_matching_ACK = true);
+//  void set_TX_address(uint32_t const &new_address, bool set_matching_ACK = true);
   // Set the receive address for a pipe from an array of bytes.
   void set_RX_address(const uint8_t* new_address, const uint8_t len, const bool enable_pipe = true, uint8_t pipe = Pipe_RX_Default);
   // Set receive address from a 32-bit unsigned int, rather than an array.
