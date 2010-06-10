@@ -59,7 +59,7 @@ void main(){
     while(! mirf.check_packet_transmitted());
     // Clear the transmit interrupt.
     mirf.clear_packet_transmitted();
-    // Check for an ACK payload
+    // Check for an ACK payload.
     if(mirf.check_packet_received()){
       // Clear the receive interrupt.
       mirf.clear_packet_received();
@@ -90,7 +90,7 @@ void main(){
     mirf.clear_packet_received();
     // Retrieve the incoming packet payload.
     packet_size = mirf.receive_packet(packet);
-    // 'packet' now contains the ACK payload of size 'packet_size'.
+    // 'packet' now contains the received packet payload of size 'packet_size'.
     // Do whatever you want with the contents here, e.g. print out to a UART.
   }
 #endif
