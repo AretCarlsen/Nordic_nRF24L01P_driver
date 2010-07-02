@@ -60,6 +60,7 @@ public:
   Nordic_nRF24L01P(CSN_pin_t &new_CSN_pin, CE_pin_t &new_CE_pin, SPI_bus_t &new_SPI_bus)
   : CSN_pin(new_CSN_pin), CE_pin(new_CE_pin), SPI_bus(new_SPI_bus)
   { }
+// When the pin and SPI bus objects are stateless, use this constructor.
   Nordic_nRF24L01P()
   { }
 

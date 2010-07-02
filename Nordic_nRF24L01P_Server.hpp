@@ -167,11 +167,13 @@ Status::Status_t Nordic_nRF24L01P_Server<MIRF_t>::process(){
       GET_RAW_C78String(addressBuf, len, MIRF_t::AddressSize_Max);
       GET_RAW_BOOL(setMatchingAck);
       mirf.set_TX_address(addressBuf, len, setMatchingAck);
+/*
     OPCODE(23) // set_TX_address(uint32_t const &new_address, bool set_matching_ACK = true)
       GET_RAW_UINT(newAddress);
       // If bool is not present, will be left at true (default).
       bool setMatchingAck = true; offsetPacket.packet->sourceBool(setMatchingAck, packetData);
       mirf.set_TX_address(newAddress, setMatchingAck);
+*/
     OPCODE(24) // set_RX_address(const uint8_t* new_address, const uint8_t len, const bool enable_pipe = true, uint8_t pipe = Pipe_RX_Default)
       MAP::MAPPacket::Capacity_t len; uint8_t addressBuf[MIRF_t::AddressSize_Max];
       // Length will be stored in len, up to Max
